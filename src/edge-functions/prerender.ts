@@ -6,12 +6,6 @@ declare const Netlify: {
 
 type EdgeContext = { next(): Promise<Response> };
 
-// Encited's crawler list (CRAWLER_USER_AGENT_PATTERN in the Encited repo).
-// Only these agents reach Encited; browsers never leave the customer's site.
-// Update this copy when that list changes.
-const CRAWLER =
-  /(?:(OAI-SearchBot|ChatGPT-User(?:\/\d+\.\d+)?|GPTBot|ChatGPT|OpenAI-))|(?:(anthropic-ai|ClaudeBot|claude-web|Claude-Web|Claude-User|Claude-SearchBot))|(?:\b(GrokBot|xAI-Grok|xAI-Bot|xAI-SearchBot)\b)|(?:(PerplexityBot|Perplexity-User))|(?:(Google-InspectionTool|GoogleOther(?:-Image|-Video)?|Googlebot|Google-CloudVertexBot|Storebot-Google|Google-NotebookLM|GoogleAgent-URLContext|GoogleAIOverviewRenderer|Google-Lens|Google-Jetski-Antigravity))|(?:(Microsoft-Copilot|CopilotBot|Copilot-Chat|Microsoft-CopilotPlugin))|(?:(BingBot|bingbot|BingPreview))|(?:facebookexternalhit.*Twitterbot|Twitterbot.*facebookexternalhit)|(?:(Meta-ExternalAgent|meta-externalagent|meta-externalfetcher|MetaBot|FacebookBot|facebookexternalhit))|(?:LinkedInBot)|(?:Amazonbot)|(?:(Applebot-Extended|Applebot|AppleNewsBot))|(?:Bytespider)|(?:(DuckAssistBot|DuckDuckBot))|(?:(cohere-training-data-crawler|cohere-ai|CohereAI))|(?:MistralAI-User)|(?:AI2Bot)|(?:CCBot)|(?:Diffbot)|(?:omgili)|(?:TimpiBot)|(?:YouBot)|(?:ExaSearchBot)|(?:(Bravebot|Brave-Search))|(?:Yandex)|(?:Twitterbot)|(?:Discordbot)|(?:(Slackbot|Slack-ImgProxy))|(?:TelegramBot)|(?:(Pinterest|Pinterestbot))|(?:Snapchat)|(?:Redditbot)|(?:Tumblr)|(?:(Mastodon|http\.rb))|(?:Viber)|(?:^Line\/)|(?:WhatsApp)|(?:(SkypeUriPreview|Skype))|(?:(Teams|MicrosoftPreview))|(?:Zoom)|(?:Notion)|(?:(Quora|QuoraBot|Quora-Bot|Poe-Bot))|(?:Medium)|(?:(Pocket|PocketParser|PocketImageCache))|(?:(Flipboard|FlipboardProxy))|(?:(Embedly|embed\.ly))|(?:YelpBot)|(?:(Baiduspider|Baidu))|(?:(Sogou|sogou))|(?:(Yeti|NaverBot|Naver))|(?:SeznamBot)|(?:(Qwantify|Qwant))|(?:Ecosia)|(?:MojeekBot)|(?:Mail\.RU_Bot)|(?:(Yahoo! Slurp|Y!J-))|(?:(SemrushBot|SEMrush))|(?:(AhrefsBot|AhrefsSiteAudit))|(?:(DotBot|Rogerbot|moz\.com))|(?:MJ12bot)|(?:Screaming Frog)|(?:SISTRIX)|(?:SEOkicks)|(?:serpstatbot)|(?:RSiteAuditor)|(?:(?:Encited|LvHTML)-SEOAuditBot)|(?:Barkrowler)|(?:HubSpot Crawler)|(?:(AwarioSmartBot|AwarioBot))|(?:DataForSeoBot)|(?:SERanking)|(?:Seobility)/i;
-
 export default async (request: Request, context: EdgeContext) => {
   const apiKey = Netlify.env.get("ENCITED_API_KEY");
   const enabled = Netlify.env.get("ENCITED_PRERENDER_ENABLED") === "true";
@@ -23,18 +17,15 @@ export default async (request: Request, context: EdgeContext) => {
     return context.next();
   }
 
-  // Only handle crawler GET requests for HTML.
+  // Only handle public GET navigations.
   // Treat missing/empty Accept and bare '*/*' as HTML so crawler tests
-  // (curl -A Googlebot) still route through prerender.
+  // (curl without -H, default fetch) still route through prerender.
   // Asset requests from browsers send specific Accept (e.g. 'text/css,*/*;q=0.1')
   // so they won't match.
   const accept = (request.headers.get("accept") || "").trim();
   const isHtmlRequest =
     !accept || accept === "*/*" || accept.includes("text/html");
-  const userAgent = request.headers.get("user-agent") || "";
-  if (request.method !== "GET" || !isHtmlRequest || !CRAWLER.test(userAgent)) {
-    return context.next();
-  }
+  if (request.method !== "GET" || !isHtmlRequest) return context.next();
 
   const baseUrl = Netlify.env.get("ENCITED_BASE_URL") || "https://encited.com";
   const headers = {
@@ -48,7 +39,7 @@ export default async (request: Request, context: EdgeContext) => {
     "upgrade-insecure-requests":
       request.headers.get("upgrade-insecure-requests") || "",
     referer: request.headers.get("referer") || "",
-    "user-agent": userAgent,
+    "user-agent": request.headers.get("user-agent") || "",
   };
 
   try {
