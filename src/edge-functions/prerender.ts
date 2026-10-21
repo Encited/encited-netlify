@@ -4,7 +4,7 @@ declare const Netlify: {
   env: { get(name: string): string | undefined };
 };
 
-type EdgeContext = { next(): Promise<Response> };
+type EdgeContext = { ip: string; next(): Promise<Response> };
 
 export default async (request: Request, context: EdgeContext) => {
   const apiKey = Netlify.env.get("ENCITED_API_KEY");
@@ -28,7 +28,7 @@ export default async (request: Request, context: EdgeContext) => {
   if (request.method !== "GET" || !isHtmlRequest) return context.next();
 
   const baseUrl = Netlify.env.get("ENCITED_BASE_URL") || "https://encited.com";
-  const headers = {
+  const headers: Record<string, string> = {
     authorization: `Bearer ${apiKey}`,
     accept: "text/html",
     "accept-language": request.headers.get("accept-language") || "",
@@ -41,6 +41,11 @@ export default async (request: Request, context: EdgeContext) => {
     referer: request.headers.get("referer") || "",
     "user-agent": request.headers.get("user-agent") || "",
   };
+  // Bot requests only: Encited checks the IP against the crawler's published
+  // ranges. Browsers send Sec-Fetch-Mode, so visitor IPs are never sent.
+  if (!request.headers.get("sec-fetch-mode") && context.ip) {
+    headers["x-encited-client-ip"] = context.ip;
+  }
 
   try {
     // Bounded so a hung Encited can never stall the customer's page loads —
