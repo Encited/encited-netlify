@@ -11,12 +11,6 @@ export default async (request: Request, context: EdgeContext) => {
   const enabled = Netlify.env.get("ENCITED_PRERENDER_ENABLED") === "true";
   if (!apiKey || !enabled) return context.next();
 
-  // Encited's own render browser stamps this on same-origin requests; passing
-  // it through prevents a render → edge function → render recursion loop.
-  if (request.headers.get("x-lovablehtml-internal") === "1") {
-    return context.next();
-  }
-
   // Only handle public GET navigations.
   // Treat missing/empty Accept and bare '*/*' as HTML so crawler tests
   // (curl without -H, default fetch) still route through prerender.
